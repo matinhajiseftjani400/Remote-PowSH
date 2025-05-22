@@ -7,7 +7,7 @@ import winreg
 import uuid
 import os
 
-TOKEN = '388397570:EDWVl7BWb5tO5KkeuYLN2yvMDhJ7dY3xS6c1hdWD'
+TOKEN = 'YOUR_BOT_TOKEN_HERE'
 API_URL = f'https://tapi.bale.ai/bot{TOKEN}/'
 is_system_command = False
 current_chat_id = None
