@@ -68,10 +68,10 @@ It will reply with a number. Copy and paste that number into the `ADMIN_CHAT_IDS
 
 ## 📃 License
 
-Licensed under the [MIT License](https://github.com/matinhajiseftjani400/Remote-PowSH?tab=MIT-1-ov-file).
+Licensed under thev[MIT License](https://github.com/matinhajiseftjani400/Remote-PowSH?tab=MIT-1-ov-file).
 
 ---
 
-Author: Matin HajiSeftjani
+Author: [Matin HajiSeftjani](https://matinhajiseftjani.ir)
 ---
 
