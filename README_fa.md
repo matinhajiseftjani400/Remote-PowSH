@@ -84,7 +84,11 @@ install firefox
 
 ---
 
-## 📃 مجوز
+## 🧾 مجوز استفاده
+
+تحت لایسنس [MIT](https://github.com/matinhajiseftjani400/Remote-PowSH?tab=MIT-1-ov-file) منتشر شده است.
+
+---
 
 MIT License [متین حاجی‌سفتجانی](https://matinhajiseftjani.ir)
 
