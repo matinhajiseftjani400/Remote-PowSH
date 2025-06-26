@@ -90,6 +90,6 @@ install firefox
 
 ---
 
-MIT License [متین حاجی‌سفتجانی](https://matinhajiseftjani.ir)
+👨‍💻 Developed by: [Matin HajiSeftjani](https://matinhajiseftjani.ir)
 
 ---
