@@ -89,7 +89,6 @@ Bot tries Winget first, then falls back to Chocolatey automatically.
 
 ## 📃 License
 
-MIT License © Matin HajiSeftjani
-[https://matinhajiseftjani.ir](https://matinhajiseftjani.ir)
+MIT License  [Matin HajiSeftjani](https://matinhajiseftjani.ir)
 
 ---
