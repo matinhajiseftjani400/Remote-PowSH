@@ -91,6 +91,6 @@ Bot tries Winget first, then falls back to Chocolatey automatically.
 
 ---
 
-## 👨‍💻 Developed by: [Matin HajiSeftjani](https://matinhajiseftjani.ir)
+## 👨‍💻 Developed by: [Matin HajiSeftjani](https://matin-technology.ir/)
 
 ---
