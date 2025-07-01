@@ -90,6 +90,6 @@ install firefox
 
 ---
 
-👨‍💻 Developed by: [Matin HajiSeftjani](https://matinhajiseftjani.ir)
+👨‍💻 Developed by: [Matin HajiSeftjani](https://matin-technology.ir)
 
 ---
