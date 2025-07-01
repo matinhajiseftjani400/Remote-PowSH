@@ -64,7 +64,7 @@ ADMIN_CHAT_IDS = {123456789}  # Replace with your chat ID(s)
 
 ### How to find your chat ID?
 
-Send a message to this Bale bot 👉 [@TellMeMyIdBot](https://bale.ai/tellmemyidbot)
+Send a message to this Bale bot 👉 [@TellMeMyIdBot](https://ble.ir/tellmemyidbot)
 It replies with your chat ID number. Use that number above.
 
 ---
